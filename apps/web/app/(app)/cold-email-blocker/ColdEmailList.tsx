@@ -144,12 +144,13 @@ export function ColdEmailList() {
 
           <TablePagination totalPages={data.totalPages} />
 
-          <NewsletterModal
-            newsletter={
-              openedRow ? { name: openedRow.fromEmail || "" } : undefined
-            }
-            onClose={() => setOpenedRow(undefined)}
-          />
+          {openedRow && (
+            <NewsletterModal
+              newsletter={{ name: openedRow.fromEmail || "" }}
+              onClose={() => setOpenedRow(undefined)}
+              mutate={mutate}
+            />
+          )}
         </div>
       ) : (
         <NoColdEmails />

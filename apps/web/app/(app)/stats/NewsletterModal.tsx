@@ -1,49 +1,63 @@
-import useSWR from "swr";
-import { BarChart } from "@tremor/react";
-import type { DateRange } from "react-day-picker";
-import Link from "next/link";
-import { ExternalLinkIcon } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { MoreDropdown } from "@/app/(app)/bulk-unsubscribe/common";
+import { useUnsubscribe } from "@/app/(app)/bulk-unsubscribe/hooks";
+import { Row } from "@/app/(app)/bulk-unsubscribe/types";
+import { getDateRangeParams } from "@/app/(app)/stats/params";
+import type { ThreadsResponse } from "@/app/api/google/threads/controller";
+import type {
+  SenderEmailsQuery,
+  SenderEmailsResponse,
+} from "@/app/api/user/stats/sender-emails/route";
+import { AlertBasic } from "@/components/Alert";
+import { LoadingContent } from "@/components/LoadingContent";
+import { usePremium } from "@/components/PremiumAlert";
+import { Tooltip } from "@/components/Tooltip";
+import { SectionHeader } from "@/components/Typography";
+import { EmailList } from "@/components/email-list/EmailList";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getDateRangeParams } from "@/app/(app)/stats/params";
-import type {
-  SenderEmailsQuery,
-  SenderEmailsResponse,
-} from "@/app/api/user/stats/sender-emails/route";
-import type { ZodPeriod } from "@inboxzero/tinybird";
-import { LoadingContent } from "@/components/LoadingContent";
-import { SectionHeader } from "@/components/Typography";
-import { EmailList } from "@/components/email-list/EmailList";
-import type { ThreadsResponse } from "@/app/api/google/threads/controller";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { getGmailFilterSettingsUrl } from "@/utils/url";
-import { Tooltip } from "@/components/Tooltip";
-import { AlertBasic } from "@/components/Alert";
-import { onAutoArchive } from "@/utils/actions/client";
-import { MoreDropdown } from "@/app/(app)/bulk-unsubscribe/common";
 import { useLabels } from "@/hooks/useLabels";
-import type { Row } from "@/app/(app)/bulk-unsubscribe/types";
+import { onAutoArchive } from "@/utils/actions/client";
+import { getGmailFilterSettingsUrl } from "@/utils/url";
+import type { ZodPeriod } from "@inboxzero/tinybird";
+import { BarChart } from "@tremor/react";
+import { ExternalLinkIcon } from "lucide-react";
+import { useSession } from "next-auth/react";
+import Link from "next/link";
 import { usePostHog } from "posthog-js/react";
+import type { DateRange } from "react-day-picker";
+import useSWR from "swr";
 
 export function NewsletterModal(props: {
-  newsletter?: Pick<Row, "name" | "lastUnsubscribeLink" | "autoArchived">;
+  newsletter: Pick<Row, "name" | "lastUnsubscribeLink" | "autoArchived">;
   onClose: (isOpen: boolean) => void;
   refreshInterval?: number;
+  mutate?: () => Promise<any>;
 }) {
   const { newsletter, refreshInterval, onClose } = props;
+  const mutate = props.mutate || (() => Promise.resolve()); // Set a default value for mutate if it's not provided
 
   const session = useSession();
   const email = session.data?.user.email;
 
   const { userLabels } = useLabels();
 
+  const { hasUnsubscribeAccess, mutate: refetchPremium } = usePremium();
+
   const posthog = usePostHog();
+
+  const { unsubscribeLoading, onUnsubscribe } = useUnsubscribe({
+    item: newsletter,
+    hasUnsubscribeAccess,
+    mutate,
+    posthog,
+    refetchPremium,
+  });
 
   return (
     <Dialog open={!!newsletter} onOpenChange={onClose}>
@@ -55,13 +69,21 @@ export function NewsletterModal(props: {
             </DialogHeader>
 
             <div className="flex space-x-2">
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" disabled={unsubscribeLoading}>
                 <a
                   href={newsletter.lastUnsubscribeLink || undefined}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={onUnsubscribe}
                 >
-                  Unsubscribe
+                  {unsubscribeLoading ? (
+                    <div className="flex cursor-not-allowed items-center opacity-50">
+                      <Button loading={true} />
+                      <span>Unsubscribing...</span>
+                    </div>
+                  ) : (
+                    <span>Unsubscribe</span>
+                  )}
                 </a>
               </Button>
               <Tooltip content="Auto archive emails using Gmail filters">
